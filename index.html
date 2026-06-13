@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NovaChat</title>
+<style>
+  * { box-sizing: border-box; margin:0; padding:0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  body { background:#e9edef; height:100vh; display:flex; align-items:center; justify-content:center; }
+  #app { width:100%; max-width:480px; height:100vh; max-height:850px; background:#fff; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 20px rgba(0,0,0,0.1); }
+
+  .topbar { background:#075E54; color:#fff; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; }
+  .topbar h1 { font-size:18px; font-weight:600; }
+  .topbar .myid { font-size:11px; opacity:0.8; cursor:pointer; }
+
+  .screen { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+  .hidden { display:none !important; }
+
+  /* Setup screen */
+  .center-box { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:14px; text-align:center; }
+  .center-box h2 { color:#075E54; }
+  .center-box input { width:100%; max-width:280px; padding:12px; border:1px solid #ccc; border-radius:8px; font-size:15px; }
+  .btn { background:#075E54; color:#fff; border:none; padding:12px 20px; border-radius:8px; font-size:15px; cursor:pointer; width:100%; max-width:280px; }
+  .btn:active { opacity:0.85; }
+
+  /* Chat list */
+  .add-bar { display:flex; padding:10px; gap:8px; background:#f0f2f5; }
+  .add-bar input { flex:1; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:14px; }
+  .add-bar button { background:#075E54; color:#fff; border:none; padding:0 16px; border-radius:8px; }
+
+  .chat-item { display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid #f0f0f0; cursor:pointer; gap:12px; }
+  .chat-item:active { background:#f5f5f5; }
+  .avatar { width:46px; height:46px; border-radius:50%; background:#075E54; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:18px; flex-shrink:0; }
+  .chat-info { flex:1; overflow:hidden; }
+  .chat-info .name { font-weight:600; font-size:15px; }
+  .chat-info .preview { font-size:13px; color:#667781; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .empty-msg { text-align:center; color:#999; padding:30px 16px; font-size:14px; }
+
+  /* Chat room */
+  .room-header { display:flex; align-items:center; gap:10px; padding:10px 16px; background:#075E54; color:#fff; }
+  .room-header .back { font-size:22px; cursor:pointer; padding:0 6px; }
+  .room-header .name { font-weight:600; font-size:16px; }
+
+  .messages { flex:1; overflow-y:auto; padding:12px; background:#efeae2; display:flex; flex-direction:column; gap:6px; }
+  .bubble { max-width:75%; padding:8px 12px; border-radius:8px; font-size:14px; line-height:1.4; word-wrap:break-word; }
+  .bubble.me { align-self:flex-end; background:#d9fdd3; }
+  .bubble.them { align-self:flex-start; background:#fff; }
+  .bubble .time { display:block; font-size:10px; color:#999; margin-top:3px; text-align:right; }
+
+  .input-bar { display:flex; padding:10px; gap:8px; background:#f0f2f5; }
+  .input-bar input { flex:1; padding:12px; border:none; border-radius:20px; font-size:14px; }
+  .input-bar button { background:#075E54; color:#fff; border:none; width:42px; height:42px; border-radius:50%; font-size:18px; }
+
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; z-index:99; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- LOADING -->
+  <div id="loadingScreen" class="screen center-box">
+    <h2>NovaChat</h2>
+    <p>Memuat...</p>
+  </div>
+
+  <!-- SETUP NAME (first time) -->
+  <div id="setupScreen" class="screen center-box hidden">
+    <h2>Selamat datang di NovaChat 👋</h2>
+    <p>Masukkan nama tampilanmu</p>
+    <input id="setupName" type="text" placeholder="Nama kamu" maxlength="20">
+    <button class="btn" id="setupBtn">Lanjut</button>
+  </div>
+
+  <!-- CHAT LIST -->
+  <div id="listScreen" class="screen hidden">
+    <div class="topbar">
+      <h1>NovaChat</h1>
+      <div class="myid" id="myIdLabel">ID: -</div>
+    </div>
+    <div class="add-bar">
+      <input id="friendIdInput" type="text" placeholder="Masukkan ID teman (NV-XXXXXXXX)" maxlength="11">
+      <button id="addFriendBtn">Chat</button>
+    </div>
+    <div id="chatList" style="flex:1; overflow-y:auto;">
+      <div class="empty-msg">Belum ada chat. Tambahkan ID teman di atas untuk mulai ngobrol.</div>
+    </div>
+  </div>
+
+  <!-- CHAT ROOM -->
+  <div id="roomScreen" class="screen hidden">
+    <div class="room-header">
+      <span class="back" id="backBtn">←</span>
+      <div class="avatar" id="roomAvatar" style="width:36px;height:36px;font-size:14px;">?</div>
+      <div class="name" id="roomName">Chat</div>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="input-bar">
+      <input id="msgInput" type="text" placeholder="Tulis pesan...">
+      <button id="sendBtn">➤</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, signInAnonymously, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, collection, query, where,
+  onSnapshot, addDoc, serverTimestamp, orderBy, updateDoc, arrayUnion
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCSmdnR5SXG1AVRYHg-Kaior8KgbgHJweI",
+  authDomain: "novachat-435f2.firebaseapp.com",
+  projectId: "novachat-435f2",
+  storageBucket: "novachat-435f2.firebasestorage.app",
+  messagingSenderId: "845267466088",
+  appId: "1:845267466088:web:3cc4d910c6a4eec15148dd"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let currentUid = null;
+let currentNovaId = null;
+let currentName = null;
+let activeChatId = null;
+let activeUnsub = null;
+let chatListUnsub = null;
+
+const $ = (id) => document.getElementById(id);
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  $(id).classList.remove('hidden');
+}
+
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+function generateNovaId() {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let id = '';
+  for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return 'NV-' + id;
+}
+
+function makeChatId(uidA, uidB) {
+  return [uidA, uidB].sort().join('_');
+}
+
+function initials(name) {
+  return (name || '?').trim().charAt(0).toUpperCase();
+}
+
+// ---------- AUTH ----------
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUid = user.uid;
+    const userDoc = await getDoc(doc(db, 'users', currentUid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      currentNovaId = data.novaId;
+      currentName = data.name;
+      enterApp();
+    } else {
+      showScreen('setupScreen');
+    }
+  } else {
+    signInAnonymously(auth).catch(err => toast('Auth error: ' + err.message));
+  }
+});
+
+// kick off
+signInAnonymously(auth).catch(err => toast('Auth error: ' + err.message));
+
+// ---------- SETUP ----------
+$('setupBtn').addEventListener('click', async () => {
+  const name = $('setupName').value.trim();
+  if (!name) { toast('Isi nama dulu ya'); return; }
+
+  let novaId, taken = true, attempts = 0;
+  while (taken && attempts < 10) {
+    novaId = generateNovaId();
+    const idDoc = await getDoc(doc(db, 'novaIds', novaId));
+    taken = idDoc.exists();
+    attempts++;
+  }
+
+  await setDoc(doc(db, 'users', currentUid), {
+    name, novaId, createdAt: serverTimestamp()
+  });
+  await setDoc(doc(db, 'novaIds', novaId), { uid: currentUid });
+
+  currentNovaId = novaId;
+  currentName = name;
+  enterApp();
+});
+
+// ---------- ENTER APP ----------
+function enterApp() {
+  $('myIdLabel').textContent = 'ID: ' + currentNovaId;
+  $('myIdLabel').title = 'Klik untuk copy';
+  showScreen('listScreen');
+  listenChatList();
+}
+
+$('myIdLabel').addEventListener('click', () => {
+  navigator.clipboard?.writeText(currentNovaId);
+  toast('ID disalin: ' + currentNovaId);
+});
+
+// ---------- ADD FRIEND / START CHAT ----------
+$('addFriendBtn').addEventListener('click', async () => {
+  let target = $('friendIdInput').value.trim().toUpperCase();
+  if (!target) return;
+  if (!target.startsWith('NV-')) target = 'NV-' + target;
+
+  if (target === currentNovaId) { toast('Itu ID kamu sendiri 🙂'); return; }
+
+  const idDoc = await getDoc(doc(db, 'novaIds', target));
+  if (!idDoc.exists()) { toast('ID tidak ditemukan'); return; }
+
+  const friendUid = idDoc.data().uid;
+  const friendUserDoc = await getDoc(doc(db, 'users', friendUid));
+  const friendName = friendUserDoc.exists() ? friendUserDoc.data().name : target;
+
+  const chatId = makeChatId(currentUid, friendUid);
+  const chatRef = doc(db, 'chats', chatId);
+  const chatSnap = await getDoc(chatRef);
+
+  if (!chatSnap.exists()) {
+    await setDoc(chatRef, {
+      members: [currentUid, friendUid],
+      memberInfo: {
+        [currentUid]: { name: currentName, novaId: currentNovaId },
+        [friendUid]: { name: friendName, novaId: target }
+      },
+      createdAt: serverTimestamp(),
+      lastMessage: '',
+      lastMessageAt: serverTimestamp()
+    });
+  }
+
+  $('friendIdInput').value = '';
+  openChat(chatId);
+});
+
+// ---------- CHAT LIST ----------
+function listenChatList() {
+  const q = query(collection(db, 'chats'), where('members', 'array-contains', currentUid));
+  if (chatListUnsub) chatListUnsub();
+  chatListUnsub = onSnapshot(q, (snap) => {
+    const listEl = $('chatList');
+    if (snap.empty) {
+      listEl.innerHTML = '<div class="empty-msg">Belum ada chat. Tambahkan ID teman di atas untuk mulai ngobrol.</div>';
+      return;
+    }
+    let rows = [];
+    snap.forEach(d => {
+      const data = d.data();
+      const otherUid = data.members.find(m => m !== currentUid);
+      const other = (data.memberInfo && data.memberInfo[otherUid]) || { name: '?', novaId: '?' };
+      rows.push({ id: d.id, other, lastMessage: data.lastMessage || '', lastMessageAt: data.lastMessageAt });
+    });
+    rows.sort((a,b) => (b.lastMessageAt?.toMillis?.()||0) - (a.lastMessageAt?.toMillis?.()||0));
+
+    listEl.innerHTML = '';
+    rows.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'chat-item';
+      div.innerHTML = `
+        <div class="avatar">${initials(r.other.name)}</div>
+        <div class="chat-info">
+          <div class="name">${r.other.name} <span style="color:#999;font-size:11px;">(${r.other.novaId})</span></div>
+          <div class="preview">${r.lastMessage || 'Belum ada pesan'}</div>
+        </div>`;
+      div.addEventListener('click', () => openChat(r.id, r.other));
+      listEl.appendChild(div);
+    });
+  });
+}
+
+// ---------- CHAT ROOM ----------
+async function openChat(chatId, otherInfo) {
+  activeChatId = chatId;
+
+  if (!otherInfo) {
+    const chatSnap = await getDoc(doc(db, 'chats', chatId));
+    const data = chatSnap.data();
+    const otherUid = data.members.find(m => m !== currentUid);
+    otherInfo = data.memberInfo[otherUid];
+  }
+
+  $('roomName').textContent = `${otherInfo.name} (${otherInfo.novaId})`;
+  $('roomAvatar').textContent = initials(otherInfo.name);
+  $('messages').innerHTML = '';
+  showScreen('roomScreen');
+
+  if (activeUnsub) activeUnsub();
+  const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'));
+  activeUnsub = onSnapshot(q, (snap) => {
+    const msgsEl = $('messages');
+    msgsEl.innerHTML = '';
+    snap.forEach(d => {
+      const m = d.data();
+      const div = document.createElement('div');
+      div.className = 'bubble ' + (m.senderId === currentUid ? 'me' : 'them');
+      const time = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : '';
+      div.innerHTML = `${escapeHtml(m.text)}<span class="time">${time}</span>`;
+      msgsEl.appendChild(div);
+    });
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+$('backBtn').addEventListener('click', () => {
+  if (activeUnsub) { activeUnsub(); activeUnsub = null; }
+  activeChatId = null;
+  showScreen('listScreen');
+});
+
+// ---------- SEND MESSAGE ----------
+async function sendMessage() {
+  const text = $('msgInput').value.trim();
+  if (!text || !activeChatId) return;
+  $('msgInput').value = '';
+
+  await addDoc(collection(db, 'chats', activeChatId, 'messages'), {
+    text, senderId: currentUid, createdAt: serverTimestamp()
+  });
+  await updateDoc(doc(db, 'chats', activeChatId), {
+    lastMessage: text, lastMessageAt: serverTimestamp()
+  });
+}
+
+$('sendBtn').addEventListener('click', sendMessage);
+$('msgInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+</script>
+</body>
+</html>
