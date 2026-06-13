@@ -53,6 +53,15 @@
   .toggle .slider:before { content:""; position:absolute; width:20px; height:20px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.2s; }
   .toggle input:checked + .slider { background:#075E54; }
   .toggle input:checked + .slider:before { transform:translateX(20px); }
+  .toggle.ban input:checked + .slider { background:#d32f2f; }
+  .admin-card .label { font-size:11px; color:#999; text-align:center; width:46px; flex-shrink:0; }
+
+  .admin-tabs { display:flex; margin:8px 16px; background:#f0f2f5; border-radius:8px; overflow:hidden; }
+  .admin-tab { flex:1; text-align:center; padding:8px; font-size:13px; cursor:pointer; }
+  .admin-tab.active { background:#075E54; color:#fff; }
+
+  .banned-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding:24px; gap:10px; }
+  .banned-screen h2 { color:#d32f2f; }
   .wa-header .myid { font-size:11px; color:#667781; cursor:pointer; }
   .search-bar { background:#f0f2f5; border-radius:24px; padding:10px 16px; color:#667781; font-size:14px; }
 
@@ -120,7 +129,7 @@
   <div id="listScreen" class="screen hidden">
     <div class="wa-header">
       <div class="top-row">
-        <h1>WhatsApp</h1>
+        <h1>NovaChat</h1>
         <div class="icons">
           <div class="myid" id="myIdLabel">ID: -</div>
           <div class="profile-icon" id="openProfileBtn">?</div>
@@ -162,16 +171,35 @@
     </div>
   </div>
 
+  <!-- BANNED SCREEN -->
+  <div id="bannedScreen" class="screen hidden">
+    <div class="banned-screen">
+      <h2>🚫 Akun Diblokir</h2>
+      <p>Akun NovaChat kamu telah diblokir oleh admin karena melanggar aturan penggunaan.</p>
+    </div>
+  </div>
+
   <!-- ADMIN SCREEN -->
   <div id="adminScreen" class="screen hidden">
     <div class="profile-header">
       <span class="back" id="adminBackBtn">←</span>
       <div style="font-weight:600; font-size:16px;">Admin Panel</div>
     </div>
-    <p style="padding:14px 16px; font-size:13px; color:#667781;">
-      Pilih user yang boleh chat ke NovaChat (Admin/Developer):
-    </p>
+    <div class="admin-tabs">
+      <div class="admin-tab active" id="tabUsers">Users</div>
+      <div class="admin-tab" id="tabChats">Semua Chat</div>
+    </div>
     <div id="adminUserList" style="flex:1; min-height:0; overflow-y:auto;"></div>
+    <div id="adminChatList" class="hidden" style="flex:1; min-height:0; overflow-y:auto;"></div>
+  </div>
+
+  <!-- ADMIN CHAT VIEW (read-only) -->
+  <div id="adminChatViewScreen" class="screen hidden">
+    <div class="room-header">
+      <span class="back" id="adminChatBackBtn">←</span>
+      <div class="name" id="adminChatTitle">Chat</div>
+    </div>
+    <div class="messages" id="adminMessages"></div>
   </div>
   <div id="roomScreen" class="screen hidden">
     <div class="room-header">
@@ -265,6 +293,10 @@ onAuthStateChanged(auth, async (user) => {
       const data = userDoc.data();
       currentNovaId = data.novaId;
       currentName = data.name;
+      if (data.banned) {
+        showScreen('bannedScreen');
+        return;
+      }
       enterApp();
     } else {
       showScreen('setupScreen');
@@ -558,10 +590,30 @@ function resizeToBase64(file, maxDim = 800, quality = 0.6) {
 // ---------- ADMIN PANEL ----------
 $('openAdminBtn').addEventListener('click', () => {
   showScreen('adminScreen');
+  $('tabUsers').classList.add('active');
+  $('tabChats').classList.remove('active');
+  $('adminUserList').classList.remove('hidden');
+  $('adminChatList').classList.add('hidden');
   loadAdminUsers();
 });
 
 $('adminBackBtn').addEventListener('click', () => showScreen('profileScreen'));
+
+$('tabUsers').addEventListener('click', () => {
+  $('tabUsers').classList.add('active');
+  $('tabChats').classList.remove('active');
+  $('adminUserList').classList.remove('hidden');
+  $('adminChatList').classList.add('hidden');
+  loadAdminUsers();
+});
+
+$('tabChats').addEventListener('click', () => {
+  $('tabChats').classList.add('active');
+  $('tabUsers').classList.remove('active');
+  $('adminChatList').classList.remove('hidden');
+  $('adminUserList').classList.add('hidden');
+  loadAdminChats();
+});
 
 async function loadAdminUsers() {
   const listEl = $('adminUserList');
@@ -575,7 +627,7 @@ async function loadAdminUsers() {
   usersSnap.forEach(d => {
     const data = d.data();
     if (data.novaId === ADMIN_NOVA_ID) return;
-    rows.push({ uid: d.id, name: data.name, novaId: data.novaId });
+    rows.push({ uid: d.id, name: data.name, novaId: data.novaId, banned: !!data.banned });
   });
 
   listEl.innerHTML = '';
@@ -587,36 +639,110 @@ async function loadAdminUsers() {
   rows.forEach(r => {
     const card = document.createElement('div');
     card.className = 'admin-card';
-    const checked = allowed.includes(r.uid) ? 'checked' : '';
+    const allowChecked = allowed.includes(r.uid) ? 'checked' : '';
+    const banChecked = r.banned ? 'checked' : '';
     card.innerHTML = `
       <div class="avatar">${initials(r.name)}</div>
       <div class="info">
         <div class="name">${r.name}</div>
         <div class="id">${r.novaId}</div>
       </div>
-      <label class="toggle">
-        <input type="checkbox" data-uid="${r.uid}" ${checked}>
-        <span class="slider"></span>
-      </label>
+      <div style="display:flex; gap:8px;">
+        <div style="text-align:center;">
+          <label class="toggle">
+            <input type="checkbox" class="allow-cb" data-uid="${r.uid}" ${allowChecked}>
+            <span class="slider"></span>
+          </label>
+          <div class="label">Chat</div>
+        </div>
+        <div style="text-align:center;">
+          <label class="toggle ban">
+            <input type="checkbox" class="ban-cb" data-uid="${r.uid}" ${banChecked}>
+            <span class="slider"></span>
+          </label>
+          <div class="label">Ban</div>
+        </div>
+      </div>
     `;
     listEl.appendChild(card);
   });
 
-  listEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
+  listEl.querySelectorAll('.allow-cb').forEach(cb => {
     cb.addEventListener('change', async (e) => {
       const uid = e.target.dataset.uid;
       const configRef = doc(db, 'config', 'adminAllowed');
       const snap = await getDoc(configRef);
       if (!snap.exists()) await setDoc(configRef, { uids: [] });
+      if (e.target.checked) await updateDoc(configRef, { uids: arrayUnion(uid) });
+      else await updateDoc(configRef, { uids: arrayRemove(uid) });
+    });
+  });
 
-      if (e.target.checked) {
-        await updateDoc(configRef, { uids: arrayUnion(uid) });
-      } else {
-        await updateDoc(configRef, { uids: arrayRemove(uid) });
-      }
+  listEl.querySelectorAll('.ban-cb').forEach(cb => {
+    cb.addEventListener('change', async (e) => {
+      const uid = e.target.dataset.uid;
+      await updateDoc(doc(db, 'users', uid), { banned: e.target.checked });
     });
   });
 }
+
+async function loadAdminChats() {
+  const listEl = $('adminChatList');
+  listEl.innerHTML = '<div class="empty-msg">Memuat...</div>';
+
+  const chatsSnap = await getDocs(collection(db, 'chats'));
+  listEl.innerHTML = '';
+  if (chatsSnap.empty) {
+    listEl.innerHTML = '<div class="empty-msg">Belum ada chat.</div>';
+    return;
+  }
+
+  chatsSnap.forEach(d => {
+    const data = d.data();
+    const members = Object.values(data.memberInfo || {});
+    const namesLabel = members.map(m => `${m.name} (${m.novaId})`).join(' & ');
+
+    const card = document.createElement('div');
+    card.className = 'chat-item';
+    card.innerHTML = `
+      <div class="avatar">💬</div>
+      <div class="chat-info">
+        <div class="name">${namesLabel}</div>
+        <div class="preview">${data.lastMessage || 'Belum ada pesan'}</div>
+      </div>`;
+    card.addEventListener('click', () => openAdminChatView(d.id, namesLabel));
+    listEl.appendChild(card);
+  });
+}
+
+let adminChatUnsub = null;
+async function openAdminChatView(chatId, title) {
+  $('adminChatTitle').textContent = title;
+  $('adminMessages').innerHTML = '';
+  showScreen('adminChatViewScreen');
+
+  if (adminChatUnsub) adminChatUnsub();
+  const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'));
+  adminChatUnsub = onSnapshot(q, (snap) => {
+    const msgsEl = $('adminMessages');
+    msgsEl.innerHTML = '';
+    snap.forEach(d => {
+      const m = d.data();
+      const div = document.createElement('div');
+      div.className = 'bubble them';
+      const time = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleString('id-ID') : '';
+      const body = (m.type === 'image' && m.imageData) ? `<img src="${m.imageData}" alt="image">` : escapeHtml(m.text || '');
+      div.innerHTML = `${body}<span class="time">${time}</span>`;
+      msgsEl.appendChild(div);
+    });
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  });
+}
+
+$('adminChatBackBtn').addEventListener('click', () => {
+  if (adminChatUnsub) { adminChatUnsub(); adminChatUnsub = null; }
+  showScreen('adminScreen');
+});
 
 $('imageInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
